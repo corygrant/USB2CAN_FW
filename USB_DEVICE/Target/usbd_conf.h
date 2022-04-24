@@ -71,7 +71,7 @@
 /*---------- -----------*/
 #define USBD_DEBUG_LEVEL     0U
 /*---------- -----------*/
-#define USBD_SELF_POWERED     0U
+#define USBD_SELF_POWERED     1U
 
 /****************************************/
 /* #define for FS and HS identification */
@@ -172,4 +172,3 @@ void USBD_static_free(void *p);
 
 #endif /* __USBD_CONF__H__ */
 
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

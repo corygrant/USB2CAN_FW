@@ -1,4 +1,20 @@
 /* USER CODE BEGIN Header */
+
+// Tasks
+// -
+
+//Interrupts
+// - USBD Receive: Add to USBD receive queue
+// - CAN Receive:  Add to CAN receive queue
+
+
+
+
+
+
+
+
+
 /**
   ******************************************************************************
   * @file           : main.c
@@ -22,12 +38,13 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "FreeRTOS.h"
+#include "cmsis_os.h"
 #include "usbd_desc.h"
 #include "usbd_def.h"
 #include "usbd_core.h"
 #include "usbd_cdc.h"
 
-#include "queue.h"
 #include "slcan.h"
 #include <stdlib.h>
 #include "led.h"
@@ -43,6 +60,9 @@
 #define USBD_RX_DATA_SIZE  2048
 #define USBD_TX_DATA_SIZE  2048
 #define CAN_QUEUE_SIZE 64
+
+#define MSGQUEUE_RX_SIZE 16
+#define MSGQUEUE_TX_SIZE 16
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -63,10 +83,11 @@ enum CAN_BITRATE eCanBitRate = CAN_BITRATE_500K;
 uint32_t nCanMode = CAN_MODE_NORMAL;
 FunctionalState eAutoRetry;
 
-queue_t *qFramePool;
-queue_t *qFromHost;
-queue_t *qToHost;
+struct USBD_CAN_Frame stUSBD_RX_Frame;
+struct USBD_CAN_Frame stCAN_RX_Frame;
 
+osMessageQueueId_t qMsgQueueUsbRx;
+osMessageQueueId_t qMsgQueueCanRx;
 
 uint8_t USBD_RxBuffer[USBD_RX_DATA_SIZE];
 uint8_t USBD_TxBuffer[USBD_TX_DATA_SIZE];
@@ -89,6 +110,13 @@ USBD_CDC_ItfTypeDef USBD_Interface =
 
 Led_t stLedTx;
 Led_t stLedRx;
+
+osThreadId_t defaultTaskHandle;
+const osThreadAttr_t defaultTask_attributes = {
+  .name = "defaultTask",
+  .priority = (osPriority_t) osPriorityNormal,
+  .stack_size = 256 * 2
+};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -96,7 +124,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_CAN_Init(void);
 /* USER CODE BEGIN PFP */
-
+void StartDefaultTask(void *argument);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -218,15 +246,8 @@ static int8_t USBD_CDC_Control(uint8_t cmd, uint8_t* pbuf, uint16_t length)
   */
 static int8_t USBD_CDC_Receive(uint8_t* Buf, uint32_t *Len)
 {
-
-
-  struct USBD_CAN_Frame *stFrame = queue_pop_front_i(qFramePool);
-  if(stFrame){
-    SLCAN_Rx(Buf, Len, stFrame);
-    if(queue_push_back_i(qFromHost, stFrame) == false){
-      queue_push_back_i(qFramePool, stFrame);
-    }
-  }
+  SLCAN_Rx(Buf, Len, &stUSBD_RX_Frame);
+  osMessageQueuePut(qMsgQueueUsbRx, &stUSBD_RX_Frame, 0U, 0U);
 
   USBD_CDC_SetRxBuffer(&hUSBD, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUSBD);
@@ -266,12 +287,9 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
   }
 
   //Add message to CAN RX queue
-  struct USBD_CAN_Frame *stFrame = queue_pop_front_i(qFramePool);
-  if(stFrame != 0){
-    memcpy(&stFrame->stRxHeader, &stCanRxHeader, sizeof(stFrame->stRxHeader));
-    memcpy(&stFrame->nData, nCanRxData, sizeof(stFrame->nData));
-    queue_push_back_i(qToHost, stFrame);
-  }
+  memcpy(&stCAN_RX_Frame.stRxHeader, &stCanRxHeader, sizeof(stCAN_RX_Frame.stRxHeader));
+  memcpy(&stCAN_RX_Frame.nData, nCanRxData, sizeof(stCAN_RX_Frame.nData));
+  osMessageQueuePut(qMsgQueueCanRx, &stCAN_RX_Frame, 0U, 0U);
 
   LedBlink(&stLedRx, 20);
 }
@@ -446,6 +464,8 @@ int main(void)
   MX_CAN_Init();
   /* USER CODE BEGIN 2 */
 
+   osKernelInitialize();
+
   /* Init Device Library, add supported class and start the library. */
   if (USBD_Init(&hUSBD, &FS_Desc, DEVICE_FS) != USBD_OK)
   {
@@ -464,27 +484,26 @@ int main(void)
     Error_Handler();
   }
 
-  //Points to frame memory location
-  qFramePool  = queue_create(CAN_QUEUE_SIZE);
-
-  //Queue of pointers to pointers popped from the frame pool
-  qFromHost   = queue_create(CAN_QUEUE_SIZE);
-
-  //Queue of pointers to pointers popped from the frame pool
-  qToHost     = queue_create(CAN_QUEUE_SIZE);
-
-  //Allocate memory that the frame pool points to
-  struct USBD_CAN_Frame *msgbuf = calloc(CAN_QUEUE_SIZE, sizeof(struct USBD_CAN_Frame));
-  for (unsigned i=0; i<CAN_QUEUE_SIZE; i++) {
-    //Fill the frame pool with pointers to the memory that was just allocated
-    queue_push_back(qFramePool, &msgbuf[i]);
+  qMsgQueueUsbRx = osMessageQueueNew(MSGQUEUE_RX_SIZE, sizeof(struct USBD_CAN_Frame), NULL);
+  if(qMsgQueueUsbRx == NULL){
+    //TODO: Message queue not created
+    Error_Handler();
   }
 
-  LedInit(&stLedRx, LED1_GPIO_Port, LED1_Pin);
-  LedInit(&stLedTx, LED2_GPIO_Port, LED2_Pin);
+  qMsgQueueCanRx = osMessageQueueNew(MSGQUEUE_RX_SIZE, sizeof(struct USBD_CAN_Frame), NULL);
+  if(qMsgQueueCanRx == NULL){
+    //TODO: Message queue not created
+    Error_Handler();
+  }
 
-  LedBlink(&stLedRx, 1000);
-  LedBlink(&stLedTx, 1000);
+
+  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  if(defaultTaskHandle == 0x0)
+      Error_Handler();
+
+  osKernelStart();
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -492,85 +511,6 @@ int main(void)
   while (1)
   {
 
-    LedUpdate(&stLedTx);
-    LedUpdate(&stLedRx);
-
-    if( (USB_VBUS_GPIO_Port->IDR & USB_VBUS_Pin) && !nUsbConnected){
-      USB_PU_GPIO_Port->ODR |= USB_PU_Pin;
-      nUsbConnected = 1;
-    }
-
-    if( !(USB_VBUS_GPIO_Port->IDR & USB_VBUS_Pin) && nUsbConnected){
-      USB_PU_GPIO_Port->ODR &= ~USB_PU_Pin;
-      nUsbConnected = 0;
-    }
-
-    //Check for messages in USB To Host queue
-    //Send to USB host
-    //If success - add pointer back to frame pool
-    //If failed - add pointer back to the front of the to host queue
-    struct USBD_CAN_Frame *stToHostFrame = queue_pop_front(qToHost);
-    if(stToHostFrame != 0){
-      //Build USB array
-      uint8_t nUsbData[30];
-      uint8_t nUsbDataLen = SLCAN_Tx(stToHostFrame, nUsbData);
-
-      if(USBD_CDC_Transmit(nUsbData, (uint16_t)nUsbDataLen) == USBD_OK){
-        queue_push_back(qFramePool, stToHostFrame);
-      } else{
-        queue_push_front(qToHost, stToHostFrame);
-      }
-    }
-
-    struct USBD_CAN_Frame *stFromHostFrame = queue_pop_front(qFromHost);
-    if(stFromHostFrame != 0){
-      switch(stFromHostFrame->eUsbdCmd){
-      case USBD_CMD_OPEN_CAN:
-        CAN_Enable();
-        queue_push_back(qFramePool, stFromHostFrame);
-        break;
-
-      case USBD_CMD_CLOSE_CAN:
-        CAN_Disable();
-        queue_push_back(qFramePool, stFromHostFrame);
-        break;
-
-      case USBD_CMD_SET_CAN_BITRATE:
-        CAN_SetBitRate(stFromHostFrame->nData[1]);
-        queue_push_back(qFramePool, stFromHostFrame);
-        break;
-
-      case USBD_CMD_SET_CAN_MODE:
-        CAN_SetMode(stFromHostFrame->nData[1]);
-        queue_push_back(qFramePool, stFromHostFrame);
-        break;
-
-      case USBD_CMD_SET_CAN_AUTORETRY:
-        CAN_SetAutoRetry(stFromHostFrame->nData[1]);
-        queue_push_back(qFramePool, stFromHostFrame);
-        break;
-
-      case USBD_CMD_GET_VERSION:
-        break;
-
-      default:
-        if((stFromHostFrame->eUsbdCmd == USBD_CMD_CAN_TRANSMIT_11BIT) ||
-            (stFromHostFrame->eUsbdCmd == USBD_CMD_CAN_REMOTE_11BIT) ||
-            (stFromHostFrame->eUsbdCmd == USBD_CMD_CAN_TRANSMIT_29BIT) ||
-            (stFromHostFrame->eUsbdCmd == USBD_CMD_CAN_REMOTE_29BIT)){
-          //Add to queue
-          if(HAL_CAN_AddTxMessage(&hcan, &stFromHostFrame->stTxHeader, stFromHostFrame->nData, &nCanTxMailbox) == HAL_OK){
-            //Tx success - put pointer back in memory pool
-            LedBlink(&stLedTx, 20);
-            queue_push_back(qFramePool, stFromHostFrame);
-          }else{
-            //Tx failed - add back to front of queue
-            queue_push_front(qFromHost, stFromHostFrame);
-          }
-        }
-        break;
-      }
-    }
 
     /* USER CODE END WHILE */
 
@@ -696,9 +636,104 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-/* Configuration Descriptor */
+void StartDefaultTask(void *argument)
+{
+  /* USER CODE BEGIN 5 */
+
+  LedInit(&stLedRx, LED1_GPIO_Port, LED1_Pin);
+  LedInit(&stLedTx, LED2_GPIO_Port, LED2_Pin);
+
+  LedBlink(&stLedRx, 1000);
+  LedBlink(&stLedTx, 1000);
+
+  while(1){
+    LedUpdate(&stLedTx);
+    LedUpdate(&stLedRx);
+
+    if( (USB_VBUS_GPIO_Port->IDR & USB_VBUS_Pin) && !nUsbConnected){
+      USB_PU_GPIO_Port->ODR |= USB_PU_Pin;
+      nUsbConnected = 1;
+    }
+
+    if( !(USB_VBUS_GPIO_Port->IDR & USB_VBUS_Pin) && nUsbConnected){
+      USB_PU_GPIO_Port->ODR &= ~USB_PU_Pin;
+      nUsbConnected = 0;
+    }
+
+    //Check for messages in USB To Host queue
+    //Send to USB host
+    struct USBD_CAN_Frame stToHostFrame;
+    if(osMessageQueueGet(qMsgQueueCanRx, &stToHostFrame, NULL, 0U) == osOK){
+      //Build USB array
+      uint8_t nUsbData[30];
+      uint8_t nUsbDataLen = SLCAN_Tx(&stToHostFrame, nUsbData);
+
+      if(USBD_CDC_Transmit(nUsbData, (uint16_t)nUsbDataLen) == USBD_FAIL){
+        osMessageQueuePut(qMsgQueueCanRx, &stToHostFrame, 0U, 0U);
+      }
+    }
+
+    struct USBD_CAN_Frame stFromHostFrame;
+    if(osMessageQueueGet(qMsgQueueCanRx, &stFromHostFrame, NULL, 0U) == osOK){
+      switch(stFromHostFrame.eUsbdCmd){
+      case USBD_CMD_OPEN_CAN:
+        CAN_Enable();
+        break;
+
+      case USBD_CMD_CLOSE_CAN:
+        CAN_Disable();
+        break;
+
+      case USBD_CMD_SET_CAN_BITRATE:
+        CAN_SetBitRate(stFromHostFrame.nData[1]);
+        break;
+
+      case USBD_CMD_SET_CAN_MODE:
+        CAN_SetMode(stFromHostFrame.nData[1]);
+        break;
+
+      case USBD_CMD_SET_CAN_AUTORETRY:
+        CAN_SetAutoRetry(stFromHostFrame.nData[1]);
+        break;
+
+      case USBD_CMD_GET_VERSION:
+        break;
+
+      default:
+        if((stFromHostFrame.eUsbdCmd == USBD_CMD_CAN_TRANSMIT_11BIT) ||
+            (stFromHostFrame.eUsbdCmd == USBD_CMD_CAN_REMOTE_11BIT) ||
+            (stFromHostFrame.eUsbdCmd == USBD_CMD_CAN_TRANSMIT_29BIT) ||
+            (stFromHostFrame.eUsbdCmd == USBD_CMD_CAN_REMOTE_29BIT)){
+          //Add to queue
+          if(HAL_CAN_AddTxMessage(&hcan, &stFromHostFrame.stTxHeader, stFromHostFrame.nData, &nCanTxMailbox) == HAL_OK){
+            //Tx success - put pointer back in memory pool
+            LedBlink(&stLedTx, 20);
+          }else{
+            //Tx failed - add back to front of queue
+            osMessageQueuePut(qMsgQueueCanRx, &stFromHostFrame, 0U, 0U);
+          }
+        }
+        break;
+      }
+    }
+  }
+  /* USER CODE END 5 */
+}
 
 /* USER CODE END 4 */
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM2) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
