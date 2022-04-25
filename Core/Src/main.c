@@ -27,9 +27,11 @@
 #include "usbd_core.h"
 #include "usbd_cdc.h"
 
+#include "init.h"
 #include "queue.h"
 #include "slcan.h"
 #include <stdlib.h>
+#include "gpio.h"
 #include "led.h"
 /* USER CODE END Includes */
 
@@ -87,14 +89,9 @@ USBD_CDC_ItfTypeDef USBD_Interface =
   USBD_CDC_Receive
 };
 
-Led_t stLedTx;
-Led_t stLedRx;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
-void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_CAN_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -273,7 +270,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     queue_push_back_i(qToHost, stFrame);
   }
 
-  LedBlink(&stLedRx, 20);
+  LedBlink(&RXLed, 20);
 }
 
 void CAN_Enable()
@@ -435,15 +432,17 @@ int main(void)
   /* USER CODE END Init */
 
   /* Configure the system clock */
-  SystemClock_Config();
+  if(SystemClock_Config() != HAL_OK)
+  {
+    Error_Handler();
+  }
 
   /* USER CODE BEGIN SysInit */
   HAL_RCC_EnableCSS();
   /* USER CODE END SysInit */
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_CAN_Init();
+  InitGPIO();
+
   /* USER CODE BEGIN 2 */
 
   /* Init Device Library, add supported class and start the library. */
@@ -480,11 +479,9 @@ int main(void)
     queue_push_back(qFramePool, &msgbuf[i]);
   }
 
-  LedInit(&stLedRx, LED1_GPIO_Port, LED1_Pin);
-  LedInit(&stLedTx, LED2_GPIO_Port, LED2_Pin);
 
-  LedBlink(&stLedRx, 1000);
-  LedBlink(&stLedTx, 1000);
+  LedBlink(&RXLed, 1000);
+  LedBlink(&TXLed, 1000);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -492,16 +489,16 @@ int main(void)
   while (1)
   {
 
-    LedUpdate(&stLedTx);
-    LedUpdate(&stLedRx);
+    LedUpdate(&TXLed);
+    LedUpdate(&RXLed);
 
-    if( (USB_VBUS_GPIO_Port->IDR & USB_VBUS_Pin) && !nUsbConnected){
-      USB_PU_GPIO_Port->ODR |= USB_PU_Pin;
+    if( ReadUSB_VBUS() && !nUsbConnected){
+      USB_PU.On();
       nUsbConnected = 1;
     }
 
-    if( !(USB_VBUS_GPIO_Port->IDR & USB_VBUS_Pin) && nUsbConnected){
-      USB_PU_GPIO_Port->ODR &= ~USB_PU_Pin;
+    if( !(ReadUSB_VBUS()) && nUsbConnected){
+      USB_PU.Off();
       nUsbConnected = 0;
     }
 
@@ -561,7 +558,7 @@ int main(void)
           //Add to queue
           if(HAL_CAN_AddTxMessage(&hcan, &stFromHostFrame->stTxHeader, stFromHostFrame->nData, &nCanTxMailbox) == HAL_OK){
             //Tx success - put pointer back in memory pool
-            LedBlink(&stLedTx, 20);
+            LedBlink(&TXLed, 20);
             queue_push_back(qFramePool, stFromHostFrame);
           }else{
             //Tx failed - add back to front of queue
@@ -583,116 +580,8 @@ int main(void)
   * @brief System Clock Configuration
   * @retval None
   */
-void SystemClock_Config(void)
-{
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB;
-  PeriphClkInit.USBClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-
-/**
-  * @brief CAN Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_CAN_Init(void)
-{
-
-  /* USER CODE BEGIN CAN_Init 0 */
-
-  /* USER CODE END CAN_Init 0 */
-
-  /* USER CODE BEGIN CAN_Init 1 */
-
-  /* USER CODE END CAN_Init 1 */
-  /* USER CODE BEGIN CAN_Init 2 */
-
-  /* USER CODE END CAN_Init 2 */
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOF_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LED1_Pin|LED2_Pin|USB_PU_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(EXTRA_GPIO_Port, EXTRA_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : LED1_Pin LED2_Pin */
-  GPIO_InitStruct.Pin = LED1_Pin|LED2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : EXTRA_Pin */
-  GPIO_InitStruct.Pin = EXTRA_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(EXTRA_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : USB_VBUS_Pin */
-  GPIO_InitStruct.Pin = USB_VBUS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(USB_VBUS_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : USB_PU_Pin */
-  GPIO_InitStruct.Pin = USB_PU_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(USB_PU_GPIO_Port, &GPIO_InitStruct);
-
-}
 
 /* USER CODE BEGIN 4 */
 

@@ -7,21 +7,16 @@
 
 #include "led.h"
 
-void LedInit(Led_t* stLed, GPIO_TypeDef *pPort, uint16_t nPin){
-  stLed->pPort = pPort;
-  stLed->nPin = nPin;
-}
-
-void LedUpdate(Led_t* stLed){
+void LedUpdate(GPIO_Output* out){
   uint32_t nNow = HAL_GetTick();
 
-  if(nNow < stLed->nOnUntil){
-    stLed->pPort->ODR |= stLed->nPin;
+  if(nNow < out->nOnUntil){
+    out->On();
   } else{
-    stLed->pPort->ODR &= ~stLed->nPin;
+    out->Off();
   }
 }
 
-void LedBlink(Led_t* stLed, uint16_t nOnTime){
-  stLed->nOnUntil = HAL_GetTick() + nOnTime;
+void LedBlink(GPIO_Output* out, uint16_t nOnTime){
+  out->nOnUntil = HAL_GetTick() + nOnTime;
 }

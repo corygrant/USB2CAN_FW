@@ -42,7 +42,15 @@ enum USBD_CMD{
   USBD_CMD_CAN_REMOTE_29BIT = 'R'
 };
 
+/*
 struct __attribute__((__packed__)) USBD_CAN_Frame{
+  enum USBD_CMD eUsbdCmd;
+  CAN_TxHeaderTypeDef stTxHeader;
+  CAN_RxHeaderTypeDef stRxHeader;
+  uint8_t nData[8];
+};
+*/
+struct USBD_CAN_Frame{
   enum USBD_CMD eUsbdCmd;
   CAN_TxHeaderTypeDef stTxHeader;
   CAN_RxHeaderTypeDef stRxHeader;
