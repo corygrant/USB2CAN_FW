@@ -27,9 +27,15 @@ void SLCAN_Rx(uint8_t* nRxData, uint32_t* nRxDataLen, struct USBD_CAN_Frame *stR
   }
 
   if( (stRxFrame->eUsbdCmd == USBD_CMD_SET_CAN_BITRATE) ||
-      (stRxFrame->eUsbdCmd == USBD_CMD_SET_CAN_MODE) ||
-      (stRxFrame->eUsbdCmd == USBD_CMD_SET_CAN_BITRATE)){
+      (stRxFrame->eUsbdCmd == USBD_CMD_SET_CAN_AUTORETRY)){
     stRxFrame->nData[1] = nRxData[1];
+  }
+
+  if(stRxFrame->eUsbdCmd == USBD_CMD_SET_CAN_MODE){
+    stRxFrame->nData[1] = nRxData[1];
+    stRxFrame->nData[2] = nRxData[2];
+    stRxFrame->nData[3] = nRxData[3];
+    stRxFrame->nData[4] = nRxData[4];
   }
 
   if(stRxFrame->eUsbdCmd == USBD_CMD_CAN_TRANSMIT_11BIT){

@@ -21,7 +21,7 @@ enum CAN_BITRATE {
     CAN_BITRATE_500K,
     CAN_BITRATE_750K,
     CAN_BITRATE_1000K,
-    CAN_BITRATE_INVALID,
+    CAN_BITRATE_INVALID
 };
 
 enum CAN_BUS_STATE {
@@ -42,14 +42,7 @@ enum USBD_CMD{
   USBD_CMD_CAN_REMOTE_29BIT = 'R'
 };
 
-/*
-struct __attribute__((__packed__)) USBD_CAN_Frame{
-  enum USBD_CMD eUsbdCmd;
-  CAN_TxHeaderTypeDef stTxHeader;
-  CAN_RxHeaderTypeDef stRxHeader;
-  uint8_t nData[8];
-};
-*/
+//struct __attribute__((__packed__)) USBD_CAN_Frame{
 struct USBD_CAN_Frame{
   enum USBD_CMD eUsbdCmd;
   CAN_TxHeaderTypeDef stTxHeader;

@@ -385,13 +385,17 @@ void CAN_SetBitRate(uint8_t nBitRate)
   }
 }
 
-void CAN_SetMode(uint8_t nMode)
+void CAN_SetMode(uint32_t nMode)
 {
   if(eCanBusState == OFF_BUS){
-    if(nMode == 1)
-      nCanMode = 1;
-    else
-      nCanMode = 0;
+    if(nMode == CAN_MODE_NORMAL)
+      nCanMode = nMode;
+    if(nMode == CAN_MODE_LOOPBACK)
+      nCanMode = nMode;
+    if(nMode == CAN_MODE_SILENT)
+      nCanMode = nMode;
+    if(nMode == CAN_MODE_SILENT_LOOPBACK)
+      nCanMode = nMode;
   }
 }
 
@@ -492,16 +496,6 @@ int main(void)
     LedUpdate(&TXLed);
     LedUpdate(&RXLed);
 
-    if( ReadUSB_VBUS() && !nUsbConnected){
-      USB_PU.On();
-      nUsbConnected = 1;
-    }
-
-    if( !(ReadUSB_VBUS()) && nUsbConnected){
-      USB_PU.Off();
-      nUsbConnected = 0;
-    }
-
     //Check for messages in USB To Host queue
     //Send to USB host
     //If success - add pointer back to frame pool
@@ -538,7 +532,8 @@ int main(void)
         break;
 
       case USBD_CMD_SET_CAN_MODE:
-        CAN_SetMode(stFromHostFrame->nData[1]);
+        CAN_SetMode(  (stFromHostFrame->nData[1] << 24) + (stFromHostFrame->nData[2] << 16) +
+                      (stFromHostFrame->nData[3] << 8) + stFromHostFrame->nData[4]);
         queue_push_back(qFramePool, stFromHostFrame);
         break;
 
