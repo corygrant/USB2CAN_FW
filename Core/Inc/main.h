@@ -61,8 +61,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 
 /* USER CODE BEGIN Private defines */
-#define MAJOR_VERSION 0
-#define MINOR_VERSION 1
+#define MAJOR_VERSION 1
+#define MINOR_VERSION 0
 #define BUILD 0
 /* USER CODE END Private defines */
 
