@@ -93,7 +93,7 @@ USBD_CDC_ItfTypeDef USBD_Interface =
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
-
+void JumpToBootloader(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -417,6 +417,51 @@ void HAL_RCC_CSSCallback(void) {
 }
 /* USER CODE END 0 */
 
+#define BOOT_ADDR  0x1FFFD800
+
+struct boot_vectable_{
+  uint32_t Initial_SP;
+  void (*Reset_Handler)(void);
+};
+
+#define BOOTVTAB ((struct boot_vectable_*)BOOT_ADDR)
+ void JumpToBootloader(void)
+ {
+    //Disable all interrupts
+    __disable_irq();
+
+    // Reset USB
+    USB->CNTR = 0x0003;
+
+    //De-init all peripherals
+    //HAL_ADC_DeInit(&hadc1);
+    //Place all deinit here
+
+    //Disable systick timer
+    SysTick->CTRL = 0;
+    SysTick->LOAD = 0;
+    SysTick->VAL = 0;
+
+    //Set the clock to the default state
+    HAL_RCC_DeInit();
+
+    //Clear interrupt enable register and interrupt pending register
+    for (uint8_t i = 0; i < sizeof(NVIC->ICER) / sizeof(NVIC->ICER[0]); i++)
+    {
+      NVIC->ICER[i] = 0xFFFFFFFF;
+      NVIC->ICPR[i] = 0xFFFFFFFF;
+    }
+
+    //Re-enable all interrupts
+    __enable_irq();
+
+    //Set the MSP
+    __set_MSP(BOOTVTAB->Initial_SP);
+
+    //Jump to bootloader
+    BOOTVTAB->Reset_Handler();
+ }
+
 /**
   * @brief  The application entry point.
   * @retval int
@@ -495,6 +540,8 @@ int main(void)
 
     LedUpdate(&TXLed);
     LedUpdate(&RXLed);
+
+    JumpToBootloader();
 
     //Check for messages in USB To Host queue
     //Send to USB host
