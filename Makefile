@@ -116,7 +116,7 @@ include $(CHIBIOS)/os/various/cpp_wrappers/chcpp.mk
 include $(BOARDDIR)/board.mk
 
 # Define linker script file here
-LDSCRIPT= $(STARTUPLD)/STM32F303x8.ld
+LDSCRIPT= $(STARTUPLD)/STM32F302x8.ld
 
 # C sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
@@ -127,10 +127,8 @@ CSRC = $(ALLCSRC)
 CPPSRC = $(ALLCPPSRC) \
          $(BOARDDIR)/port.cpp \
          can.cpp \
-         analog.cpp \
-         digital.cpp \
-         rotary_switch.cpp \
-         analog_switch.cpp \
+         mailbox.cpp \
+         usb.cpp \
          main.cpp
          
 

@@ -3,8 +3,6 @@
 
 #include "canboard_config.h"
 #include "can.h"
-#include "analog.h"
-#include "rotary_switch.h"
 
 /*
  * Application entry point.
