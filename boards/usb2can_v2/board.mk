@@ -1,8 +1,8 @@
 # List of all the board related files.
-BOARDSRC = ./boards/canboard_v2/board.c
+BOARDSRC = ./boards/usb2can_v2/board.c
 
 # Required include directories
-BOARDINC = ./boards/canboard_v2
+BOARDINC = ./boards/usb2can_v2
 
 # Shared variables
 ALLCSRC += $(BOARDSRC)

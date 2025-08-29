@@ -91,7 +91,7 @@ endif
 #
 
 # Define project name here
-PROJECT = USB2CAN
+PROJECT = $(BOARD)
 
 # Target settings.
 MCU  = cortex-m4

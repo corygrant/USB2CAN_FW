@@ -1,7 +1,7 @@
 #include "ch.h"
 #include "hal.h"
 
-#include "canboard_config.h"
+#include "usb2can_config.h"
 #include "can.h"
 
 /*
