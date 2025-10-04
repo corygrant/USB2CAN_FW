@@ -5,10 +5,16 @@
 
 #define MAILBOX_SIZE 64
 
-msg_t PostTxFrame(CANTxFrame *frame);
-msg_t PostTxUsbFrame(CANTxFrame *frame);
-msg_t FetchTxFrame(CANTxFrame *frame);
-msg_t FetchTxUsbFrame(CANTxFrame *frame);
-msg_t PostRxFrame(CANRxFrame *frame);
-msg_t FetchRxFrame(CANRxFrame *frame);
-bool RxFramesEmpty();
+// CAN
+msg_t PostCanTxFrame(CANTxFrame *frame);
+msg_t FetchCanTxFrame(CANTxFrame *frame);
+
+msg_t PostCanRxFrame(CANRxFrame *frame);
+msg_t FetchCanRxFrame(CANRxFrame *frame);
+
+// USB
+msg_t PostUsbTxFrame(CANTxFrame *frame);
+msg_t FetchUsbTxFrame(CANTxFrame *frame);
+
+msg_t PostUsbRxFrame(CANRxFrame *frame);
+msg_t FetchUsbRxFrame(CANRxFrame *frame);

@@ -322,7 +322,7 @@ const SerialUSBConfig serusbcfg = {
     USB1_DATA_AVAILABLE_EP,
     USB1_INTERRUPT_REQUEST_EP};
 
-static THD_WORKING_AREA(waUsbTxThread, 1024);
+static THD_WORKING_AREA(waUsbTxThread, 512);
 void UsbTxThread(void *)
 {
     chRegSetThreadName("USB Tx");
@@ -337,7 +337,7 @@ void UsbTxThread(void *)
         {
             do
             {
-                res = FetchTxUsbFrame(&msg);
+                res = FetchUsbTxFrame(&msg);
                 if (res == MSG_OK)
                 {
                     uint8_t nData[22];
@@ -378,7 +378,7 @@ void UsbTxThread(void *)
                     
                     size_t nWritten = chnWriteTimeout(&SDU1, (const uint8_t *)nData, sizeof(nData), TIME_IMMEDIATE);
                     if (nWritten == 0)
-                        PostTxUsbFrame(&msg);
+                        PostUsbTxFrame(&msg);
 
                     chThdSleepMicroseconds(USB_TX_MSG_SPLIT);
                 }
@@ -393,7 +393,7 @@ void UsbTxThread(void *)
     }
 }
 
-static THD_WORKING_AREA(waUsbRxThread, 1024);
+static THD_WORKING_AREA(waUsbRxThread, 512);
 void UsbRxThread(void *)
 {
     chRegSetThreadName("USB Rx");
@@ -418,7 +418,7 @@ void UsbRxThread(void *)
 
                 //msg.SID = stConfig.stCanOutput.nBaseId - 1;
 
-                PostRxFrame(&msg);
+                PostUsbRxFrame(&msg);
                 // TODO:What to do if mailbox is full?
             }
 

@@ -22,7 +22,7 @@ void CanTxThread(void *)
         msg_t res;
         do
         {
-            res = FetchTxFrame(&msg);
+            res = FetchCanTxFrame(&msg);
             if (res == MSG_OK)
             {
                 msg.IDE = CAN_IDE_STD;
@@ -57,7 +57,7 @@ void CanRxThread(void *)
         {
             nLastCanRxTime = SYS_TIME;
 
-            res = PostRxFrame(&msg);
+            res = PostCanRxFrame(&msg);
         }
 
         if (chThdShouldTerminateX())

@@ -11,7 +11,7 @@ BOARDDIR = boards/$(BOARD)
 
 # Compiler options here.
 ifeq ($(USE_OPT),)
-  USE_OPT = -O2 -ggdb -fomit-frame-pointer -falign-functions=16 -fsingle-precision-constant
+  USE_OPT = -O0 -ggdb -fomit-frame-pointer -falign-functions=16 -fsingle-precision-constant
 #           ^^^
 # If planning to attach a debugger, change to -O0
 endif
