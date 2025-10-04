@@ -1,122 +1,87 @@
 #include "can.h"
 #include "hal.h"
 #include "port.h"
+#include "mailbox.h"
 #include "usb2can_config.h"
 
 #include <iterator>
+#define RX_TIMEOUT_MS 100
 
-static uint8_t nCanBaseIdOffset = 0;
-static uint8_t nCanHeartbeat = 0;
+static uint32_t nLastCanRxTime;
 
 static THD_WORKING_AREA(waCanTxThread, 256);
-void CanTxThread(void*)
+void CanTxThread(void *)
 {
     chRegSetThreadName("CAN Tx");
 
-    CANTxFrame canTxMsg;
+    CANTxFrame msg;
 
-    while(1)
+    while (1)
     {
-        //=======================================================
-        //Msg 0 (Analog inputs 1-4 millivolts)
-        //=======================================================
-        canTxMsg.IDE = CAN_IDE_STD;
-        canTxMsg.SID = CAN_BASE_ID + nCanBaseIdOffset + 0;
-        canTxMsg.DLC = 8;
-        canTxMsg.data16[0] = (uint16_t)(GetAdcVolts(AnIn1) * 1000);
-        canTxMsg.data16[1] = (uint16_t)(GetAdcVolts(AnIn2) * 1000);
-        canTxMsg.data16[2] = (uint16_t)(GetAdcVolts(AnIn3) * 1000);
-        canTxMsg.data16[3] = (uint16_t)(GetAdcVolts(AnIn4) * 1000);
+        // Send all messages in the TX queue
+        msg_t res;
+        do
+        {
+            res = FetchTxFrame(&msg);
+            if (res == MSG_OK)
+            {
+                msg.IDE = CAN_IDE_STD;
+                msg.RTR = CAN_RTR_DATA;
+                res = canTransmitTimeout(&CAND1, CAN_ANY_MAILBOX, &msg, TIME_IMMEDIATE);
+                // Returns true if mailbox full or nothing connected
+                // TODO: What to do if no tx?
 
-        canTransmitTimeout(&CAND1, CAN_ANY_MAILBOX, &canTxMsg, TIME_INFINITE);
+                chThdSleepMicroseconds(CAN_TX_MSG_SPLIT);
+            }
+        } while (res == MSG_OK);
 
-        chThdSleepMilliseconds(CAN_TX_MSG_SPLIT);
+        if (chThdShouldTerminateX())
+            chThdExit(MSG_OK);
 
-        //=======================================================
-        //Msg 1 (Analog input 5 millivolts and temperature)
-        //=======================================================
-        canTxMsg.IDE = CAN_IDE_STD;
-        canTxMsg.SID = CAN_BASE_ID + nCanBaseIdOffset + 1;
-        canTxMsg.DLC = 8;
-        canTxMsg.data16[0] = (uint16_t)(GetAdcVolts(AnIn5) * 1000);
-        canTxMsg.data16[1] = 0;
-        canTxMsg.data16[2] = 0;
-        canTxMsg.data16[3] = GetTemperature();
-
-        canTransmitTimeout(&CAND1, CAN_ANY_MAILBOX, &canTxMsg, TIME_INFINITE);
-
-        chThdSleepMilliseconds(CAN_TX_MSG_SPLIT);
-
-        //=======================================================
-        //Msg 2 (Rotary switches, dig inputs, analog input switches, low side output status, heartbeat)
-        //=======================================================
-        canTxMsg.IDE = CAN_IDE_STD;
-        canTxMsg.SID = CAN_BASE_ID + nCanBaseIdOffset + 2;
-        canTxMsg.DLC = 8;
-        canTxMsg.data8[0] = (GetRotarySwPos(RotarySw2) << 4) + GetRotarySwPos(RotarySw1);
-        canTxMsg.data8[1] = (GetRotarySwPos(RotarySw4) << 4) + GetRotarySwPos(RotarySw3);
-        canTxMsg.data8[2] = GetRotarySwPos(RotarySw5);
-        canTxMsg.data8[3] = 0; //Empty
-        canTxMsg.data8[4] = (GetDigIn(DigIn8) << 7) + (GetDigIn(DigIn7) << 6) + (GetDigIn(DigIn6) << 5) + (GetDigIn(DigIn5) << 4) + 
-                            (GetDigIn(DigIn4) << 3) + (GetDigIn(DigIn3) << 2) + (GetDigIn(DigIn2) << 1) + GetDigIn(DigIn1);
-        canTxMsg.data8[5] = (GetAnSwitch(AnIn5) << 4) + (GetAnSwitch(AnIn4) << 3) + (GetAnSwitch(AnIn3) << 2) + (GetAnSwitch(AnIn2) << 1) + GetAnSwitch(AnIn1);
-        canTxMsg.data8[6] = (GetDigOut(DigOut4) << 3) + (GetDigOut(DigOut3) << 2) + (GetDigOut(DigOut2) << 1) + GetDigOut(DigOut1);;
-        canTxMsg.data8[7] = nCanHeartbeat;
-
-        canTransmitTimeout(&CAND1, CAN_ANY_MAILBOX, &canTxMsg, TIME_INFINITE);
-
-        nCanHeartbeat++;
-
-        chThdSleepMilliseconds(CAN_TX_MSG_DELAY);
+        chThdSleepMicroseconds(30);
     }
 }
 
 static THD_WORKING_AREA(waCanRxThread, 128);
-static THD_FUNCTION(CanRxThread, p)
+void CanRxThread(void *)
 {
-    (void)p;
-
-    CANRxFrame canRxMsg;
+    CANRxFrame msg;
 
     chRegSetThreadName("CAN Rx");
 
     while (true)
     {
-        msg_t msg = canReceiveTimeout(&CAND1, CAN_ANY_MAILBOX, &canRxMsg, TIME_INFINITE);
-        if (msg != MSG_OK)
+
+        msg_t res = canReceiveTimeout(&CAND1, CAN_ANY_MAILBOX, &msg, TIME_IMMEDIATE);
+        if (res == MSG_OK)
         {
-            continue;
+            nLastCanRxTime = SYS_TIME;
+
+            res = PostRxFrame(&msg);
         }
 
-        if (canRxMsg.DLC >= 4)
-        {
-            SetDigOut(DigOut1, (bool)(canRxMsg.data8[0] & 0x01));
-            SetDigOut(DigOut2, (bool)(canRxMsg.data8[1] & 0x01));
-            SetDigOut(DigOut3, (bool)(canRxMsg.data8[2] & 0x01));
-            SetDigOut(DigOut4, (bool)(canRxMsg.data8[3] & 0x01));
-        }
+        if (chThdShouldTerminateX())
+            chThdExit(MSG_OK);
+
+        chThdSleepMicroseconds(30);
     }
 }
 
-void InitCan()
+static thread_t *canTxThreadRef;
+static thread_t *canRxThreadRef;
+
+msg_t InitCan(CanBitrate eBitrate)
 {
-    //Set CAN base ID
-    nCanBaseIdOffset = (GetDigIn(IdSel1) << 4) + (GetDigIn(IdSel2) << 5);
+    msg_t ret = canStart(&CAND1, &GetCanConfig(eBitrate));
+    if (ret != HAL_RET_SUCCESS)
+        return ret;
+    canTxThreadRef = chThdCreateStatic(waCanTxThread, sizeof(waCanTxThread), NORMALPRIO + 1, CanTxThread, nullptr);
+    canRxThreadRef = chThdCreateStatic(waCanRxThread, sizeof(waCanRxThread), NORMALPRIO + 1, CanRxThread, nullptr);
 
-    const CANFilter filters[] =
-    {
-        {
-            .filter = 0,
-            .mode = 0,
-            .scale = 1,
-            .assignment = 0,
-            .register1 = ((uint32_t)(CAN_BASE_ID + nCanBaseIdOffset + 3) << 21),
-            .register2 = ((uint32_t)0x7FFU << 21) | (1U << 2),
-        },
-    };
+    return HAL_RET_SUCCESS;
+}
 
-    canSTM32SetFilters(&CAND1, 0, std::size(filters), filters);
-    canStart(&CAND1, &GetCanConfig());
-    chThdCreateStatic(waCanTxThread, sizeof(waCanTxThread), NORMALPRIO + 1, CanTxThread, nullptr);
-    chThdCreateStatic(waCanRxThread, sizeof(waCanRxThread), NORMALPRIO + 1, CanRxThread, nullptr);
+bool CanRxIsActive()
+{
+    return (SYS_TIME - nLastCanRxTime) < RX_TIMEOUT_MS;
 }

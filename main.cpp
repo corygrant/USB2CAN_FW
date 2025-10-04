@@ -1,8 +1,9 @@
-#include "ch.h"
+#include "ch.hpp"
 #include "hal.h"
 
 #include "usb2can_config.h"
 #include "can.h"
+#include "enums.h"
 
 /*
  * Application entry point.
@@ -13,11 +14,10 @@ int main(void)
   halInit();
   chSysInit();
 
-  InitCan();
+  InitCan(CanBitrate::Bitrate_500K);
 
   while (true)
   {
-    UpdateSwPos();
     chThdSleepMilliseconds(500);
   }
 }

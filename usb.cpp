@@ -1,7 +1,7 @@
 #include "usb.h"
 #include "hal.h"
-#include "port.h"
 #include "mailbox.h"
+#include "usb2can_config.h"
 
 /* Virtual serial port over USB.*/
 SerialUSBDriver SDU1;
@@ -416,7 +416,7 @@ void UsbRxThread(void *)
                     msg.DLC++;
                 }
 
-                msg.SID = stConfig.stCanOutput.nBaseId - 1;
+                //msg.SID = stConfig.stCanOutput.nBaseId - 1;
 
                 PostRxFrame(&msg);
                 // TODO:What to do if mailbox is full?
@@ -436,11 +436,7 @@ msg_t InitUsb()
 {
     msg_t ret;
 
-    usbDisconnectBus(serusbcfg.usbp);
-
-    //Wait for disconnect if USB is already connected
-    if(palReadLine(LINE_USB_VBUS) == PAL_HIGH)
-        chThdSleepMilliseconds(1500);
+    usbStop(serusbcfg.usbp);
 
     sduObjectInit(&SDU1);
 
@@ -451,8 +447,6 @@ msg_t InitUsb()
     ret = usbStart(serusbcfg.usbp, &usbcfg);
     if (ret != MSG_OK)
         return ret;
-
-    usbConnectBus(serusbcfg.usbp);
 
     chThdCreateStatic(waUsbTxThread, sizeof(waUsbTxThread), NORMALPRIO + 1, UsbTxThread, nullptr);
     chThdCreateStatic(waUsbRxThread, sizeof(waUsbRxThread), NORMALPRIO + 1, UsbRxThread, nullptr);

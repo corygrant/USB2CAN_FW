@@ -1,5 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "port.h"
+#include "enums.h"
 
-void InitCan();
+msg_t InitCan(CanBitrate eBitrate);
