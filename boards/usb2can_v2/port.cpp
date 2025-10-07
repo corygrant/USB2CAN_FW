@@ -37,18 +37,34 @@ static const CANConfig canConfig125 =
     CAN_BTR_SJW(0) | CAN_BTR_BRP(15)  | CAN_BTR_TS1(14) | CAN_BTR_TS2(1),
 };
 
-const CANConfig& GetCanConfig(CanBitrate bitrate) {
+CANConfig GetCanConfig(CanBitrate bitrate, CanMode eMode) 
+{
+    CANConfig config;
+
     switch(bitrate) {
         case CanBitrate::Bitrate_1000K:
-            return canConfig1000;
+            config = canConfig1000;
+            break;
         case CanBitrate::Bitrate_500K:
-            return canConfig500;
+            config = canConfig500;
+            break;
         case CanBitrate::Bitrate_250K:
-            return canConfig250;
+            config = canConfig250;
+            break;
         case CanBitrate::Bitrate_125K:
-            return canConfig125;
+            config = canConfig125;
+            break;
         default:
-            return canConfig500;
+            config = canConfig500;
     }
-    return canConfig500;
+
+    if(eMode == CanMode::Silent){
+        config.btr |= CAN_BTR_SILM;
+    } 
+
+    if(eMode == CanMode::Loopback){
+        config.btr |= CAN_BTR_LBKM;
+    }
+
+    return config;
 }

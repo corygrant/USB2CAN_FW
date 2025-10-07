@@ -396,7 +396,7 @@ void UsbTxThread(void *)
                 res = FetchUsbTxFrame(&msg);
                 if (res == MSG_OK)
                 {
-                    nLen = FormatSLCAN(&msg, buf);
+                    nLen = SLCAN::Format(&msg, buf);
                     
                     size_t nWritten = chnWriteTimeout(&SDU1, (const uint8_t *)buf, nLen, TIME_IMMEDIATE);
                     if (nWritten == 0)
@@ -420,19 +420,21 @@ void UsbRxThread(void *)
 {
     chRegSetThreadName("USB Rx");
 
-    CANRxFrame msg;
+    SlcanRxFrame msg;
     uint8_t buf[30];
 
     while (true)
     {
-        usbstate_t state = usbGetDriverStateI(&USBD1);
         if ((SDU1.state == SDU_READY) &&
              (usbGetDriverStateI(&USBD1) == USB_ACTIVE))
         {
+            for(size_t i = 0; i < sizeof(buf); i++)
+                buf[i] = 0;
+                
             size_t nRead = chnReadTimeout(&SDU1, buf, sizeof(buf), TIME_IMMEDIATE);
             if ((nRead != 0) && (nRead <= sizeof(buf)))
             {
-                ParseSLCAN(buf, nRead, &msg);
+                SLCAN::Parse(buf, nRead, &msg);
                 PostUsbRxFrame(&msg);
             }
 

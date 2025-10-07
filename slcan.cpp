@@ -1,6 +1,6 @@
 #include "slcan.h"
 
-SLCAN_Cmd ParseSLCAN_Cmd(uint8_t nByte)
+SLCAN_Cmd SLCAN::ParseCmd(uint8_t nByte)
 {
     switch (nByte)
     {
@@ -29,7 +29,7 @@ SLCAN_Cmd ParseSLCAN_Cmd(uint8_t nByte)
     }
 }
 
-CanBitrate GetSLCAN_Bitrate(uint8_t nByte)
+CanBitrate SLCAN::GetBitrate(uint8_t nByte)
 {
 
     if ((nByte == 4) || (nByte == '4'))
@@ -47,7 +47,7 @@ CanBitrate GetSLCAN_Bitrate(uint8_t nByte)
     return CanBitrate::Bitrate_500K; // Invalid bitrate
 }
 
-void ConvertSLCAN(uint8_t *nData, uint8_t nDataLen)
+void SLCAN::Convert(uint8_t *nData, uint8_t nDataLen)
 {
     // Convert from ASCII (2nd character to end)
     for (uint8_t i = 1; i < nDataLen; i++)
@@ -64,7 +64,7 @@ void ConvertSLCAN(uint8_t *nData, uint8_t nDataLen)
     }
 }
 
-void FormatSLCAN_Version(uint8_t nMajor, uint8_t nMinor, uint8_t *nData)
+void SLCAN::FormatVersion(uint8_t nMajor, uint8_t nMinor, uint8_t *nData)
 {
     nData[0] = 'V';
     nData[1] = (nMajor / 10) + '0';
@@ -73,12 +73,11 @@ void FormatSLCAN_Version(uint8_t nMajor, uint8_t nMinor, uint8_t *nData)
     nData[4] = (nMinor % 10) + '0';
 }
 
-void ParseSLCAN(uint8_t *nRxData, uint8_t nRxDataLen, CANRxFrame *stRxFrame)
+void SLCAN::Parse(uint8_t *nRxData, uint8_t nRxDataLen, SlcanRxFrame *stRxFrame)
 {
     uint8_t nDataFirstPos;
-    SLCAN_Cmd eCmd;
 
-    eCmd = ParseSLCAN_Cmd(nRxData[0]);
+    stRxFrame->eCmd = ParseCmd(nRxData[0]);
 
     // Convert from ASCII (2nd character to end)
     for (uint8_t i = 1; i < nRxDataLen; i++)
@@ -94,80 +93,80 @@ void ParseSLCAN(uint8_t *nRxData, uint8_t nRxDataLen, CANRxFrame *stRxFrame)
             nRxData[i] = nRxData[i] - '0';
     }
 
-    if ((eCmd == SLCAN_Cmd::SetBitrate) ||
-        (eCmd == SLCAN_Cmd::SetAutoRetry))
+    if ((stRxFrame->eCmd == SLCAN_Cmd::SetBitrate) ||
+        (stRxFrame->eCmd == SLCAN_Cmd::SetAutoRetry))
     {
-        stRxFrame->data8[1] = nRxData[1];
+        stRxFrame->frame.data8[1] = nRxData[1];
     }
 
-    if (eCmd == SLCAN_Cmd::SetMode)
+    if (stRxFrame->eCmd == SLCAN_Cmd::SetMode)
     {
-        stRxFrame->data8[1] = nRxData[1];
-        stRxFrame->data8[2] = nRxData[2];
-        stRxFrame->data8[3] = nRxData[3];
-        stRxFrame->data8[4] = nRxData[4];
+        stRxFrame->frame.data8[1] = nRxData[1];
+        stRxFrame->frame.data8[2] = nRxData[2];
+        stRxFrame->frame.data8[3] = nRxData[3];
+        stRxFrame->frame.data8[4] = nRxData[4];
     }
 
-    if (eCmd == SLCAN_Cmd::Transmit11Bit)
+    if (stRxFrame->eCmd == SLCAN_Cmd::Transmit11Bit)
     {
-        stRxFrame->SID = ((nRxData[1] & 0xF) << 8) + ((nRxData[2] & 0xF) << 4) + (nRxData[3] & 0xF);
+        stRxFrame->frame.SID = ((nRxData[1] & 0xF) << 8) + ((nRxData[2] & 0xF) << 4) + (nRxData[3] & 0xF);
 
-        stRxFrame->DLC = nRxData[4];
+        stRxFrame->frame.DLC = nRxData[4];
 
         nDataFirstPos = 5;
 
-        for (int i = 0; i < stRxFrame->DLC; i++)
+        for (int i = 0; i < stRxFrame->frame.DLC; i++)
         {
-            stRxFrame->data8[i] = ((nRxData[i + nDataFirstPos] & 0xF) << 4) + (nRxData[i + nDataFirstPos + 1] & 0xF);
+            stRxFrame->frame.data8[i] = ((nRxData[i + nDataFirstPos] & 0xF) << 4) + (nRxData[i + nDataFirstPos + 1] & 0xF);
             nDataFirstPos++;
         }
 
-        stRxFrame->EID = 0;
-        stRxFrame->IDE = CAN_IDE_STD;
-        stRxFrame->RTR = CAN_RTR_DATA;
+        stRxFrame->frame.EID = 0;
+        stRxFrame->frame.IDE = CAN_IDE_STD;
+        stRxFrame->frame.RTR = CAN_RTR_DATA;
     }
 
-    if (eCmd == SLCAN_Cmd::Remote11Bit)
+    if (stRxFrame->eCmd == SLCAN_Cmd::Remote11Bit)
     {
-        stRxFrame->SID = ((nRxData[1] & 0xF) << 8) + ((nRxData[2] & 0xF) << 4) + (nRxData[3] & 0xF);
+        stRxFrame->frame.SID = ((nRxData[1] & 0xF) << 8) + ((nRxData[2] & 0xF) << 4) + (nRxData[3] & 0xF);
 
-        stRxFrame->EID = 0;
-        stRxFrame->IDE = CAN_IDE_STD;
-        stRxFrame->RTR = CAN_RTR_REMOTE;
+        stRxFrame->frame.EID = 0;
+        stRxFrame->frame.IDE = CAN_IDE_STD;
+        stRxFrame->frame.RTR = CAN_RTR_REMOTE;
     }
 
-    if (eCmd == SLCAN_Cmd::Transmit29Bit)
+    if (stRxFrame->eCmd == SLCAN_Cmd::Transmit29Bit)
     {
-        stRxFrame->EID = ((nRxData[1] & 0xF) << 28) + ((nRxData[2] & 0xF) << 24) + ((nRxData[3] & 0xF) << 20) + ((nRxData[4] & 0xF) << 16) +
+        stRxFrame->frame.EID = ((nRxData[1] & 0xF) << 28) + ((nRxData[2] & 0xF) << 24) + ((nRxData[3] & 0xF) << 20) + ((nRxData[4] & 0xF) << 16) +
                          ((nRxData[5] & 0xF) << 12) + ((nRxData[6] & 0xF) << 8) + ((nRxData[7] & 0xF) << 4) + (nRxData[8] & 0xF);
 
-        stRxFrame->DLC = nRxData[9];
+        stRxFrame->frame.DLC = nRxData[9];
 
         nDataFirstPos = 10;
 
-        for (int i = 0; i < stRxFrame->DLC; i++)
+        for (int i = 0; i < stRxFrame->frame.DLC; i++)
         {
-            stRxFrame->data8[i] = ((nRxData[i + nDataFirstPos] & 0xF) << 4) + (nRxData[i + nDataFirstPos + 1] & 0xF);
+            stRxFrame->frame.data8[i] = ((nRxData[i + nDataFirstPos] & 0xF) << 4) + (nRxData[i + nDataFirstPos + 1] & 0xF);
             nDataFirstPos++;
         }
 
-        stRxFrame->SID = 0;
-        stRxFrame->IDE = CAN_IDE_EXT;
-        stRxFrame->RTR = CAN_RTR_DATA;
+        stRxFrame->frame.SID = 0;
+        stRxFrame->frame.IDE = CAN_IDE_EXT;
+        stRxFrame->frame.RTR = CAN_RTR_DATA;
     }
 
-    if (eCmd == SLCAN_Cmd::Remote29Bit)
+    if (stRxFrame->eCmd == SLCAN_Cmd::Remote29Bit)
     {
-        stRxFrame->EID = ((nRxData[1] & 0xF) << 28) + ((nRxData[2] & 0xF) << 24) + ((nRxData[3] & 0xF) << 20) + ((nRxData[4] & 0xF) << 16) +
+        stRxFrame->frame.EID = ((nRxData[1] & 0xF) << 28) + ((nRxData[2] & 0xF) << 24) + ((nRxData[3] & 0xF) << 20) + ((nRxData[4] & 0xF) << 16) +
                                       ((nRxData[5] & 0xF) << 12) + ((nRxData[6] & 0xF) << 8) + ((nRxData[7] & 0xF) << 4) + (nRxData[8] & 0xF);
 
-        stRxFrame->SID = 0;
-        stRxFrame->IDE = CAN_IDE_EXT;
-        stRxFrame->RTR = CAN_RTR_REMOTE;
+        stRxFrame->frame.SID = 0;
+        stRxFrame->frame.IDE = CAN_IDE_EXT;
+        stRxFrame->frame.RTR = CAN_RTR_REMOTE;
     }
 }
 
-uint8_t FormatSLCAN(CANTxFrame *stFrame, uint8_t *nData)
+uint8_t SLCAN::Format(CANTxFrame *stFrame, uint8_t *nData)
 {
     uint8_t nFirstDataPos;
     uint8_t nLastDataPos;

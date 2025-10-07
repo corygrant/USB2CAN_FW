@@ -81,15 +81,14 @@ void CanRxThread(void *)
 static thread_t *canTxThreadRef;
 static thread_t *canRxThreadRef;
 
-msg_t InitCan(CanBitrate eBitrate)
+msg_t InitCan(CanBitrate eBitrate, CanMode eMode)
 {
-
+    //Stop if already running
     if (canTxThreadRef || canRxThreadRef)
-    {
         StopCan();
-    }
-
-    msg_t ret = canStart(&CAND1, &GetCanConfig(eBitrate));
+    
+    CANConfig config = GetCanConfig(eBitrate, eMode);
+    msg_t ret = canStart(&CAND1, &config);
     if (ret != HAL_RET_SUCCESS)
         return ret;
     canTxThreadRef = chThdCreateStatic(waCanTxThread, sizeof(waCanTxThread), NORMALPRIO + 1, CanTxThread, nullptr);
@@ -100,6 +99,9 @@ msg_t InitCan(CanBitrate eBitrate)
 
 void StopCan()
 {
+    if (!canTxThreadRef && !canRxThreadRef)
+        return;
+        
     // Signal threads to terminate
     chThdTerminate(canTxThreadRef);
     chThdTerminate(canRxThreadRef);

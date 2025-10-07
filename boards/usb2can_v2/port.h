@@ -5,4 +5,4 @@
 
 #define SYS_TIME TIME_I2MS(chVTGetSystemTimeX())
 
-const CANConfig& GetCanConfig(CanBitrate bitrate);
+CANConfig GetCanConfig(CanBitrate bitrate, CanMode eMode);

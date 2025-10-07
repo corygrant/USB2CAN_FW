@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include "hal.h"
+#include "enums.h"
 
 #define MAILBOX_SIZE 64
 
@@ -15,5 +16,7 @@ msg_t FetchCanTxFrame(CANTxFrame *frame);
 msg_t PostUsbTxFrame(CANTxFrame *frame);
 msg_t FetchUsbTxFrame(CANTxFrame *frame);
 
-msg_t PostUsbRxFrame(CANRxFrame *frame);
-msg_t FetchUsbRxFrame(CANRxFrame *frame);
+msg_t PostUsbRxFrame(SlcanRxFrame *frame);
+msg_t FetchUsbRxFrame(SlcanRxFrame *frame);
+
+void ClearMailboxes();

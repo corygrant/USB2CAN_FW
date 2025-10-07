@@ -2,19 +2,19 @@
 #include "ch.hpp"
 
 static chibios_rt::Mailbox<CANTxFrame*, MAILBOX_SIZE> txCanMb;
-static chibios_rt::Mailbox<CANRxFrame*, MAILBOX_SIZE> rxUsbMb;
 static chibios_rt::Mailbox<CANTxFrame*, MAILBOX_SIZE> txUsbMb;
+static chibios_rt::Mailbox<SlcanRxFrame*, MAILBOX_SIZE> rxUsbMb;
 
 //Mailbox buffer of CAN frames
 //Not managed by mailbox
 CANTxFrame txCanFrames[MAILBOX_SIZE];
-CANRxFrame rxUsbFrames[MAILBOX_SIZE];
 CANTxFrame txUsbFrames[MAILBOX_SIZE];
+SlcanRxFrame rxUsbFrames[MAILBOX_SIZE];
 
 //Used to manage the memory used by the mailbox
 bool txCanMsgUsed[MAILBOX_SIZE];
-bool rxUsbMsgUsed[MAILBOX_SIZE];
 bool txUsbMsgUsed[MAILBOX_SIZE];
+bool rxUsbMsgUsed[MAILBOX_SIZE];
 
 msg_t PostCanTxFrame(CANTxFrame *frame)
 {
@@ -98,7 +98,7 @@ msg_t FetchUsbTxFrame(CANTxFrame *frame)
     return result;
 }
 
-msg_t PostUsbRxFrame(CANRxFrame *frame)
+msg_t PostUsbRxFrame(SlcanRxFrame *frame)
 {
     for (int i = 0; i < MAILBOX_SIZE; i++) {
         if (!rxUsbMsgUsed[i]) {
@@ -120,9 +120,9 @@ msg_t PostUsbRxFrame(CANRxFrame *frame)
     return MSG_TIMEOUT;  // No free slots
 }
 
-msg_t FetchUsbRxFrame(CANRxFrame *frame)
+msg_t FetchUsbRxFrame(SlcanRxFrame *frame)
 {
-    CANRxFrame *rxFrame;
+    SlcanRxFrame *rxFrame;
     // Fetch a pointer from the mailbox
     msg_t result = rxUsbMb.fetch(&rxFrame, TIME_IMMEDIATE);
     if (result == MSG_OK) {
@@ -137,4 +137,25 @@ msg_t FetchUsbRxFrame(CANRxFrame *frame)
         return result;
     }
     return result;
+}
+
+void ClearMailboxes()
+{
+    // Clear CAN TX Mailbox
+    txCanMb.reset();
+    txCanMb.resumeX();
+    for (int i = 0; i < MAILBOX_SIZE; i++)
+        txCanMsgUsed[i] = false;
+
+    // Clear USB RX Mailbox
+    rxUsbMb.reset();
+    rxUsbMb.resumeX();
+    for (int i = 0; i < MAILBOX_SIZE; i++)
+        rxUsbMsgUsed[i] = false;    
+
+    // Clear USB TX Mailbox
+    txUsbMb.reset();
+    txUsbMb.resumeX();
+    for (int i = 0; i < MAILBOX_SIZE; i++)
+        txUsbMsgUsed[i] = false;
 }
