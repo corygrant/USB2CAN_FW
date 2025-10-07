@@ -60,7 +60,7 @@
 #define STM32_TIM1SW                        STM32_TIM1SW_PCLK2
 #define STM32_TIM8SW                        STM32_TIM8SW_PCLK2
 #define STM32_RTCSEL                        STM32_RTCSEL_LSI
-#define STM32_USB_CLOCK_REQUIRED            FALSE
+#define STM32_USB_CLOCK_REQUIRED            TRUE
 #define STM32_USBPRE                        STM32_USBPRE_DIV1P5
 
 /*

@@ -9,8 +9,7 @@
 msg_t PostCanTxFrame(CANTxFrame *frame);
 msg_t FetchCanTxFrame(CANTxFrame *frame);
 
-msg_t PostCanRxFrame(CANRxFrame *frame);
-msg_t FetchCanRxFrame(CANRxFrame *frame);
+//CanRx frame goes to UsbTx
 
 // USB
 msg_t PostUsbTxFrame(CANTxFrame *frame);

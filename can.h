@@ -5,3 +5,4 @@
 #include "enums.h"
 
 msg_t InitCan(CanBitrate eBitrate);
+void StopCan();

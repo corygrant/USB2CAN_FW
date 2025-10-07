@@ -129,6 +129,7 @@ CPPSRC = $(ALLCPPSRC) \
          can.cpp \
          mailbox.cpp \
          usb.cpp \
+         slcan.cpp \
          main.cpp
          
 

@@ -9,7 +9,7 @@
 
 static uint32_t nLastCanRxTime;
 
-static THD_WORKING_AREA(waCanTxThread, 256);
+static THD_WORKING_AREA(waCanTxThread, 128);
 void CanTxThread(void *)
 {
     chRegSetThreadName("CAN Tx");
@@ -46,6 +46,7 @@ static THD_WORKING_AREA(waCanRxThread, 128);
 void CanRxThread(void *)
 {
     CANRxFrame msg;
+    CANTxFrame txMsg;
 
     chRegSetThreadName("CAN Rx");
 
@@ -57,7 +58,17 @@ void CanRxThread(void *)
         {
             nLastCanRxTime = SYS_TIME;
 
-            res = PostCanRxFrame(&msg);
+            //Copy RX to TX frame
+            txMsg.DLC = msg.DLC;
+            txMsg.IDE = msg.IDE;
+            txMsg.RTR = msg.RTR;
+            if (msg.IDE == CAN_IDE_STD)
+                txMsg.SID = msg.SID;
+            else
+                txMsg.EID = msg.EID;
+            txMsg.data64[0] = msg.data64[0];
+            
+            res = PostUsbTxFrame(&txMsg);
         }
 
         if (chThdShouldTerminateX())
@@ -72,6 +83,12 @@ static thread_t *canRxThreadRef;
 
 msg_t InitCan(CanBitrate eBitrate)
 {
+
+    if (canTxThreadRef || canRxThreadRef)
+    {
+        StopCan();
+    }
+
     msg_t ret = canStart(&CAND1, &GetCanConfig(eBitrate));
     if (ret != HAL_RET_SUCCESS)
         return ret;
@@ -79,6 +96,24 @@ msg_t InitCan(CanBitrate eBitrate)
     canRxThreadRef = chThdCreateStatic(waCanRxThread, sizeof(waCanRxThread), NORMALPRIO + 1, CanRxThread, nullptr);
 
     return HAL_RET_SUCCESS;
+}
+
+void StopCan()
+{
+    // Signal threads to terminate
+    chThdTerminate(canTxThreadRef);
+    chThdTerminate(canRxThreadRef);
+
+    // Wait for threads to exit
+    chThdWait(canTxThreadRef);
+    chThdWait(canRxThreadRef);
+
+    // Stop CAN driver
+    canStop(&CAND1);
+
+    // Reset thread references
+    canTxThreadRef = NULL;
+    canRxThreadRef = NULL;
 }
 
 bool CanRxIsActive()
