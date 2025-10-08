@@ -37,7 +37,7 @@ static const CANConfig canConfig125 =
     CAN_BTR_SJW(0) | CAN_BTR_BRP(15)  | CAN_BTR_TS1(14) | CAN_BTR_TS2(1),
 };
 
-CANConfig GetCanConfig(CanBitrate bitrate, CanMode eMode) 
+CANConfig GetCanConfig(CanBitrate bitrate, CanMode eMode, bool bAutoRetry) 
 {
     CANConfig config;
 
@@ -64,6 +64,10 @@ CANConfig GetCanConfig(CanBitrate bitrate, CanMode eMode)
 
     if(eMode == CanMode::Loopback){
         config.btr |= CAN_BTR_LBKM;
+    }
+
+    if(!bAutoRetry){
+        config.mcr |= CAN_MCR_NART;
     }
 
     return config;

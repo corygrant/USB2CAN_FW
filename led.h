@@ -13,16 +13,11 @@ public:
         m_line = type;
     };
 
-    void Solid(bool bState);
-    void Code(uint8_t nCode);
-    void Blink();
+    void Update();
+    void Blink(uint16_t nLength);
 
     private:
         ioline_t m_line;
 
-        bool bState; //Current state of the LED
         uint32_t nUntil = 0;
-        uint8_t nBlinkCount;
-        uint8_t nBlinkState; //0 = blinking code, 1 = pause between blinks
-        bool bFirst = true;
 };

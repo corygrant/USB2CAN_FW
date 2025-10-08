@@ -126,10 +126,12 @@ CSRC = $(ALLCSRC)
 # setting.
 CPPSRC = $(ALLCPPSRC) \
          $(BOARDDIR)/port.cpp \
+         $(BOARDDIR)/hw_devices.cpp \
          can.cpp \
          mailbox.cpp \
          usb.cpp \
          slcan.cpp \
+         led.cpp \
          main.cpp
          
 

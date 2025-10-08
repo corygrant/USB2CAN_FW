@@ -2,12 +2,11 @@
 #include "hal.h"
 #include "port.h"
 #include "mailbox.h"
+#include "hw_devices.h"
 #include "usb2can_config.h"
 
 #include <iterator>
 #define RX_TIMEOUT_MS 100
-
-static uint32_t nLastCanRxTime;
 
 static THD_WORKING_AREA(waCanTxThread, 128);
 void CanTxThread(void *)
@@ -56,8 +55,6 @@ void CanRxThread(void *)
         msg_t res = canReceiveTimeout(&CAND1, CAN_ANY_MAILBOX, &msg, TIME_IMMEDIATE);
         if (res == MSG_OK)
         {
-            nLastCanRxTime = SYS_TIME;
-
             //Copy RX to TX frame
             txMsg.DLC = msg.DLC;
             txMsg.IDE = msg.IDE;
@@ -69,6 +66,8 @@ void CanRxThread(void *)
             txMsg.data64[0] = msg.data64[0];
             
             res = PostUsbTxFrame(&txMsg);
+
+            rxLed.Blink(20);
         }
 
         if (chThdShouldTerminateX())
@@ -81,13 +80,13 @@ void CanRxThread(void *)
 static thread_t *canTxThreadRef;
 static thread_t *canRxThreadRef;
 
-msg_t InitCan(CanBitrate eBitrate, CanMode eMode)
+msg_t InitCan(CanBitrate eBitrate, CanMode eMode, bool bAutoRetry)
 {
     //Stop if already running
     if (canTxThreadRef || canRxThreadRef)
         StopCan();
     
-    CANConfig config = GetCanConfig(eBitrate, eMode);
+    CANConfig config = GetCanConfig(eBitrate, eMode, bAutoRetry);
     msg_t ret = canStart(&CAND1, &config);
     if (ret != HAL_RET_SUCCESS)
         return ret;
@@ -101,7 +100,7 @@ void StopCan()
 {
     if (!canTxThreadRef && !canRxThreadRef)
         return;
-        
+
     // Signal threads to terminate
     chThdTerminate(canTxThreadRef);
     chThdTerminate(canRxThreadRef);
@@ -116,9 +115,4 @@ void StopCan()
     // Reset thread references
     canTxThreadRef = NULL;
     canRxThreadRef = NULL;
-}
-
-bool CanRxIsActive()
-{
-    return (SYS_TIME - nLastCanRxTime) < RX_TIMEOUT_MS;
 }

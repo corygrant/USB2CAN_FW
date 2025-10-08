@@ -194,8 +194,8 @@
 /*
  * IO lines assignments.
  */
-#define LINE_LED_TX                 PAL_LINE(GPIOA, 3U)
-#define LINE_LED_RX                 PAL_LINE(GPIOA, 4U)
+#define LINE_LED_RX                 PAL_LINE(GPIOA, 5U)
+#define LINE_LED_TX                 PAL_LINE(GPIOA, 6U)
 #define LINE_EXTRA1                 PAL_LINE(GPIOB, 12U)
 #define LINE_SWDIO                  PAL_LINE(GPIOA, 13U)
 #define LINE_SWCLK                  PAL_LINE(GPIOA, 14U)

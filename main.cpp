@@ -2,6 +2,7 @@
 #include "hal.h"
 
 #include "usb2can_config.h"
+#include "hw_devices.h"
 #include "can.h"
 #include "usb.h"
 #include "enums.h"
@@ -13,6 +14,7 @@ CANTxFrame stTxFrame;
 CanBitrate eBitrate = CanBitrate::Bitrate_500K;
 CanMode eCanMode = CanMode::Normal;
 BusState eBusState = BusState::OffBus;
+bool bAutoRetry = true;
 
 /*
 Available commands
@@ -40,8 +42,14 @@ int main(void)
 
     InitUsb();
 
+    txLed.Blink(1000);
+    rxLed.Blink(1000);
+
     while (true)
     {
+        txLed.Update();
+        rxLed.Update();
+
         if (usbGetDriverStateI(&USBD1) == USB_ACTIVE)
         {
             msg_t res;
@@ -54,7 +62,7 @@ int main(void)
                     switch (stRxFrame.eCmd)
                     {
                     case SLCAN_Cmd::Open:
-                        res = InitCan(eBitrate, eCanMode);
+                        res = InitCan(eBitrate, eCanMode, bAutoRetry);
                         if (res == MSG_OK)
                             eBusState = BusState::OnBus;
                         break;
@@ -69,7 +77,7 @@ int main(void)
                         if (eBusState == BusState::OnBus)
                             break; // Cannot change bitrate while on bus
 
-                        if(stRxFrame.frame.DLC >= 2)
+                        if (stRxFrame.frame.DLC >= 2)
                             eBitrate = SLCAN::GetBitrate(stRxFrame.frame.data8[1]);
                         break;
 
@@ -77,16 +85,16 @@ int main(void)
                         if (eBusState == BusState::OnBus)
                             break; // Cannot change bitrate while on bus
 
-                        //if(stRxFrame.DLC >= 2)
-                        //    eBitrate = SLCAN::GetBitrate(stRxFrame.data8[1]);
+                        if (stRxFrame.frame.DLC >= 2)
+                            eCanMode = SLCAN::GetMode(stRxFrame.frame.data8[1]);
                         break;
 
                     case SLCAN_Cmd::SetAutoRetry:
                         if (eBusState == BusState::OnBus)
                             break; // Cannot change bitrate while on bus
 
-                        //if(stRxFrame.DLC >= 2)
-                        //    eBitrate = SLCAN::GetBitrate(stRxFrame.data8[1]);
+                        if (stRxFrame.frame.DLC >= 2)
+                            bAutoRetry = SLCAN::GetAutoRetry(stRxFrame.frame.data8[1]);
                         break;
 
                     case SLCAN_Cmd::GetVersion:
@@ -103,8 +111,9 @@ int main(void)
                     case SLCAN_Cmd::Remote11Bit:
                     case SLCAN_Cmd::Remote29Bit:
                         if (eBusState == BusState::OffBus)
-                                break; // Cannot transmit while off bus
+                            break; // Cannot transmit while off bus
                         PostCanTxFrame(&stTxFrame);
+                        txLed.Blink(20);
                         break;
                     }
                 }

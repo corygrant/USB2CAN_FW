@@ -4,5 +4,5 @@
 #include "port.h"
 #include "enums.h"
 
-msg_t InitCan(CanBitrate eBitrate, CanMode eMode);
+msg_t InitCan(CanBitrate eBitrate, CanMode eMode, bool bAutoRetry);
 void StopCan();

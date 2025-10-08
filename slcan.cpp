@@ -47,6 +47,31 @@ CanBitrate SLCAN::GetBitrate(uint8_t nByte)
     return CanBitrate::Bitrate_500K; // Invalid bitrate
 }
 
+CanMode SLCAN::GetMode(uint8_t nByte)
+{
+    if ((nByte == 0) || (nByte == '0'))
+        return CanMode::Normal;
+
+    if ((nByte == 1) || (nByte == '1'))
+        return CanMode::Silent;
+
+    if ((nByte == 2) || (nByte == '2'))
+        return CanMode::Loopback;
+
+    return CanMode::Normal; // Invalid mode, default to normal
+}
+    
+bool SLCAN::GetAutoRetry(uint8_t nByte)
+{
+    if ((nByte == 0) || (nByte == '0'))
+        return false;
+
+    if ((nByte == 1) || (nByte == '1'))
+        return true;
+
+    return true; // Invalid value, default to true
+}
+
 void SLCAN::Convert(uint8_t *nData, uint8_t nDataLen)
 {
     // Convert from ASCII (2nd character to end)
@@ -79,19 +104,7 @@ void SLCAN::Parse(uint8_t *nRxData, uint8_t nRxDataLen, SlcanRxFrame *stRxFrame)
 
     stRxFrame->eCmd = ParseCmd(nRxData[0]);
 
-    // Convert from ASCII (2nd character to end)
-    for (uint8_t i = 1; i < nRxDataLen; i++)
-    {
-        // Lowercase letters
-        if (nRxData[i] >= 'a')
-            nRxData[i] = nRxData[i] - 'a' + 10;
-        // Uppercase letters
-        else if (nRxData[i] >= 'A')
-            nRxData[i] = nRxData[i] - 'A' + 10;
-        // Numbers
-        else
-            nRxData[i] = nRxData[i] - '0';
-    }
+    Convert(nRxData, nRxDataLen);
 
     if ((stRxFrame->eCmd == SLCAN_Cmd::SetBitrate) ||
         (stRxFrame->eCmd == SLCAN_Cmd::SetAutoRetry))
@@ -137,8 +150,8 @@ void SLCAN::Parse(uint8_t *nRxData, uint8_t nRxDataLen, SlcanRxFrame *stRxFrame)
 
     if (stRxFrame->eCmd == SLCAN_Cmd::Transmit29Bit)
     {
-        stRxFrame->frame.EID = ((nRxData[1] & 0xF) << 28) + ((nRxData[2] & 0xF) << 24) + ((nRxData[3] & 0xF) << 20) + ((nRxData[4] & 0xF) << 16) +
-                         ((nRxData[5] & 0xF) << 12) + ((nRxData[6] & 0xF) << 8) + ((nRxData[7] & 0xF) << 4) + (nRxData[8] & 0xF);
+        stRxFrame->frame.EID =  ((nRxData[1] & 0xF) << 28) + ((nRxData[2] & 0xF) << 24) + ((nRxData[3] & 0xF) << 20) + ((nRxData[4] & 0xF) << 16) +
+                                ((nRxData[5] & 0xF) << 12) + ((nRxData[6] & 0xF) << 8) + ((nRxData[7] & 0xF) << 4) + (nRxData[8] & 0xF);
 
         stRxFrame->frame.DLC = nRxData[9];
 
@@ -157,8 +170,8 @@ void SLCAN::Parse(uint8_t *nRxData, uint8_t nRxDataLen, SlcanRxFrame *stRxFrame)
 
     if (stRxFrame->eCmd == SLCAN_Cmd::Remote29Bit)
     {
-        stRxFrame->frame.EID = ((nRxData[1] & 0xF) << 28) + ((nRxData[2] & 0xF) << 24) + ((nRxData[3] & 0xF) << 20) + ((nRxData[4] & 0xF) << 16) +
-                                      ((nRxData[5] & 0xF) << 12) + ((nRxData[6] & 0xF) << 8) + ((nRxData[7] & 0xF) << 4) + (nRxData[8] & 0xF);
+        stRxFrame->frame.EID =  ((nRxData[1] & 0xF) << 28) + ((nRxData[2] & 0xF) << 24) + ((nRxData[3] & 0xF) << 20) + ((nRxData[4] & 0xF) << 16) +
+                                ((nRxData[5] & 0xF) << 12) + ((nRxData[6] & 0xF) << 8) + ((nRxData[7] & 0xF) << 4) + (nRxData[8] & 0xF);
 
         stRxFrame->frame.SID = 0;
         stRxFrame->frame.IDE = CAN_IDE_EXT;
@@ -177,24 +190,16 @@ uint8_t SLCAN::Format(CANTxFrame *stFrame, uint8_t *nData)
     if (stFrame->RTR == CAN_RTR_DATA)
     {
         if (stFrame->IDE == CAN_IDE_STD)
-        {
             nData[0] = 't';
-        }
         else
-        {
             nData[0] = 'T';
-        }
     }
     else
     {
         if (stFrame->IDE == CAN_IDE_STD)
-        {
             nData[0] = 'r';
-        }
         else
-        {
             nData[0] = 'R';
-        }
     }
 
     if (stFrame->IDE == CAN_IDE_STD)
