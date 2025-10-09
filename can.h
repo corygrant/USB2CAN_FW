@@ -6,3 +6,4 @@
 
 msg_t InitCan(CanBitrate eBitrate, CanMode eMode, bool bAutoRetry);
 void StopCan();
+CANTxFrame RxToTxFrame(CANRxFrame *stRxFrame);

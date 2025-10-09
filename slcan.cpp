@@ -134,7 +134,6 @@ void SLCAN::Parse(uint8_t *nRxData, uint8_t nRxDataLen, SlcanRxFrame *stRxFrame)
             nDataFirstPos++;
         }
 
-        stRxFrame->frame.EID = 0;
         stRxFrame->frame.IDE = CAN_IDE_STD;
         stRxFrame->frame.RTR = CAN_RTR_DATA;
     }
@@ -143,7 +142,6 @@ void SLCAN::Parse(uint8_t *nRxData, uint8_t nRxDataLen, SlcanRxFrame *stRxFrame)
     {
         stRxFrame->frame.SID = ((nRxData[1] & 0xF) << 8) + ((nRxData[2] & 0xF) << 4) + (nRxData[3] & 0xF);
 
-        stRxFrame->frame.EID = 0;
         stRxFrame->frame.IDE = CAN_IDE_STD;
         stRxFrame->frame.RTR = CAN_RTR_REMOTE;
     }
@@ -162,8 +160,7 @@ void SLCAN::Parse(uint8_t *nRxData, uint8_t nRxDataLen, SlcanRxFrame *stRxFrame)
             stRxFrame->frame.data8[i] = ((nRxData[i + nDataFirstPos] & 0xF) << 4) + (nRxData[i + nDataFirstPos + 1] & 0xF);
             nDataFirstPos++;
         }
-
-        stRxFrame->frame.SID = 0;
+ 
         stRxFrame->frame.IDE = CAN_IDE_EXT;
         stRxFrame->frame.RTR = CAN_RTR_DATA;
     }

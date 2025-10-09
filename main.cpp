@@ -111,6 +111,7 @@ int main(void)
                     case SLCAN_Cmd::Remote29Bit:
                         if (eBusState == BusState::OffBus)
                             break; // Cannot transmit while off bus
+                        stTxFrame = RxToTxFrame(&stRxFrame.frame);
                         PostCanTxFrame(&stTxFrame);
                         txLed.Blink(20);
                         break;

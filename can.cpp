@@ -116,3 +116,18 @@ void StopCan()
     canTxThreadRef = NULL;
     canRxThreadRef = NULL;
 }
+
+CANTxFrame RxToTxFrame(CANRxFrame *stRxFrame)
+{
+    CANTxFrame txMsg;
+    txMsg.DLC = stRxFrame->DLC;
+    txMsg.IDE = stRxFrame->IDE;
+    txMsg.RTR = stRxFrame->RTR;
+    if (stRxFrame->IDE == CAN_IDE_STD)
+        txMsg.SID = stRxFrame->SID;
+    else
+        txMsg.EID = stRxFrame->EID;
+    txMsg.data64[0] = stRxFrame->data64[0];
+
+    return txMsg;
+}
