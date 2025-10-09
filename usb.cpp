@@ -63,15 +63,16 @@ static const USBDescriptor vcom_device_descriptor = {
 #define CDC_IF_DESC_SET(comIfNum, datIfNum, comInEp, datOutEp, datInEp)                                                 \
     /* Interface Descriptor.*/                                                                                          \
     USB_DESC_INTERFACE(                                                                                                 \
-        comIfNum,                                               /* bInterfaceNumber.        */                          \
-        0x00,                                                   /* bAlternateSetting.       */                          \
-        0x01,                                                   /* bNumEndpoints.           */                          \
-        CDC_COMMUNICATION_INTERFACE_CLASS,                      /* bInterfaceClass.         */                          \
-        CDC_ABSTRACT_CONTROL_MODEL,                             /* bInterfaceSubClass.      */                          \
-        0x01,                                                   /* bInterfaceProtocol (AT                               \
-                                                                   commands, CDC section                                \
-                                                                   4.4).                    */                          \
-        0), /* iInterface.              */                      /* Header Functional Descriptor (CDC section 5.2.3).*/  \
+        comIfNum,                          /* bInterfaceNumber.        */                                               \
+        0x00,                              /* bAlternateSetting.       */                                               \
+        0x01,                              /* bNumEndpoints.           */                                               \
+        CDC_COMMUNICATION_INTERFACE_CLASS, /* bInterfaceClass.         */                                               \
+        CDC_ABSTRACT_CONTROL_MODEL,        /* bInterfaceSubClass.      */                                               \
+        0x01,                              /* bInterfaceProtocol (AT                                                    \
+                                              commands, CDC section                                                     \
+                                              4.4).                    */                                               \
+        0),                                                                                                             \
+        /* iInterface.              */                          /* Header Functional Descriptor (CDC section 5.2.3).*/  \
         USB_DESC_BYTE(5),                                       /* bLength.                 */                          \
         USB_DESC_BYTE(CDC_CS_INTERFACE),                        /* bDescriptorType.         */                          \
         USB_DESC_BYTE(CDC_HEADER),                              /* bDescriptorSubtype.      */                          \
@@ -98,20 +99,22 @@ static const USBDescriptor vcom_device_descriptor = {
                                                                                                                         \
         /* CDC Data Interface Descriptor.*/                                                                             \
         USB_DESC_INTERFACE(                                                                                             \
-            datIfNum,                             /* bInterfaceNumber.        */                                        \
-            0x00,                                 /* bAlternateSetting.       */                                        \
-            0x02,                                 /* bNumEndpoints.           */                                        \
-            CDC_DATA_INTERFACE_CLASS,             /* bInterfaceClass.         */                                        \
-            0x00,                                 /* bInterfaceSubClass (CDC                                            \
-                                                     section 4.6).            */                                        \
-            0x00,                                 /* bInterfaceProtocol (CDC                                            \
-                                                     section 4.7).            */                                        \
-            0x00), /* iInterface.              */ /* Endpoint, Bulk OUT.*/                                              \
+            datIfNum,                 /* bInterfaceNumber.        */                                                    \
+            0x00,                     /* bAlternateSetting.       */                                                    \
+            0x02,                     /* bNumEndpoints.           */                                                    \
+            CDC_DATA_INTERFACE_CLASS, /* bInterfaceClass.         */                                                    \
+            0x00,                     /* bInterfaceSubClass (CDC                                                        \
+                                         section 4.6).            */                                                    \
+            0x00,                     /* bInterfaceProtocol (CDC                                                        \
+                                         section 4.7).            */                                                    \
+            0x00),                                                                                                      \
+        /* iInterface.              */ /* Endpoint, Bulk OUT.*/                                                         \
         USB_DESC_ENDPOINT(                                                                                              \
-            datOutEp,                             /* bEndpointAddress.        */                                        \
-            USB_EP_MODE_TYPE_BULK,                /* bmAttributes.            */                                        \
-            USB_DATA_SIZE,                        /* wMaxPacketSize.          */                                        \
-            0x00), /* bInterval.               */ /* Endpoint, Bulk IN.*/                                               \
+            datOutEp,              /* bEndpointAddress.        */                                                       \
+            USB_EP_MODE_TYPE_BULK, /* bmAttributes.            */                                                       \
+            USB_DATA_SIZE,         /* wMaxPacketSize.          */                                                       \
+            0x00),                                                                                                      \
+        /* bInterval.               */ /* Endpoint, Bulk IN.*/                                                          \
         USB_DESC_ENDPOINT(                                                                                              \
             datInEp,               /* bEndpointAddress.        */                                                       \
             USB_EP_MODE_TYPE_BULK, /* bmAttributes.            */                                                       \
@@ -399,32 +402,56 @@ void UsbTxThread(void *)
     }
 }
 
-static THD_WORKING_AREA(waUsbRxThread, 512);
+static THD_WORKING_AREA(waUsbRxThread, 1024);
 void UsbRxThread(void *)
 {
     chRegSetThreadName("USB Rx");
 
     SlcanRxFrame msg;
-    uint8_t buf[30];
+    uint8_t rxBuf[64];  // Larger buffer for accumulating data
+    uint8_t tempBuf[8]; // Small buffer for single reads
+    size_t rxIndex = 0;
 
     while (true)
     {
         if ((SDU1.state == SDU_READY) &&
             (usbGetDriverStateI(&USBD1) == USB_ACTIVE))
         {
-            size_t nRead = chnReadTimeout(&SDU1, buf, sizeof(buf), TIME_MS2I(100));
-            if ((nRead != 0) && (nRead <= sizeof(buf)))
+            size_t nRead = chnReadTimeout(&SDU1, tempBuf, 1, TIME_MS2I(100));
+            if (nRead > 0)
             {
-                SLCAN::Parse(buf, nRead, &msg);
-                PostUsbRxFrame(&msg);
+                // Add received byte to buffer
+                if (rxIndex < sizeof(rxBuf) - 1)
+                {
+                    rxBuf[rxIndex++] = tempBuf[0];
+                }
 
-                for (size_t i = 0; i < sizeof(buf); i++)
-                    buf[i] = 0;
+                // Check for carriage return
+                if (tempBuf[0] == '\r' || rxIndex >= sizeof(rxBuf) - 1)
+                {
+                    // Null terminate and process the command
+                    rxBuf[rxIndex] = '\0';
+
+                    if (rxIndex > 0)
+                    {
+                        SLCAN::Parse(rxBuf, rxIndex, &msg);
+                        PostUsbRxFrame(&msg);
+                    }
+
+                    // Reset buffer
+                    rxIndex = 0;
+                    for (size_t i = 0; i < sizeof(rxBuf); i++)
+                        rxBuf[i] = 0;
+                }
             }
         }
         else
         {
             chThdSleepMilliseconds(200);
+            // Reset buffer when not connected
+            rxIndex = 0;
+            for (size_t i = 0; i < sizeof(rxBuf); i++)
+                rxBuf[i] = 0;
         }
     }
 }
@@ -446,7 +473,9 @@ msg_t InitUsb()
         return ret;
 
     chThdCreateStatic(waUsbTxThread, sizeof(waUsbTxThread), NORMALPRIO + 1, UsbTxThread, nullptr);
-    chThdCreateStatic(waUsbRxThread, sizeof(waUsbRxThread), NORMALPRIO + 1, UsbRxThread, nullptr);
+
+    //USB Rx thread needs higher priority to avoid missing commands when there is high CAN traffic
+    chThdCreateStatic(waUsbRxThread, sizeof(waUsbRxThread), NORMALPRIO + 2, UsbRxThread, nullptr);
 
     return MSG_OK;
 }

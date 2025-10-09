@@ -57,7 +57,7 @@ int main(void)
             {
                 res = FetchUsbRxFrame(&stRxFrame);
                 if (res == MSG_OK)
-                {
+                { 
                     // Process the received USB frame
                     switch (stRxFrame.eCmd)
                     {
@@ -69,7 +69,6 @@ int main(void)
 
                     case SLCAN_Cmd::Close:
                         StopCan();
-                        ClearMailboxes();
                         eBusState = BusState::OffBus;
                         break;
 
@@ -116,6 +115,7 @@ int main(void)
                         txLed.Blink(20);
                         break;
                     }
+                        
                 }
             } while (res == MSG_OK);
 
