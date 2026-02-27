@@ -385,8 +385,7 @@ void UsbTxThread(void *)
                 {
                     nLen = SLCAN::Format(&msg, buf);
 
-                    size_t nWritten = chnWriteTimeout(&SDU1, (const uint8_t *)buf, nLen, TIME_IMMEDIATE);
-                    (void)nWritten;
+                    chnWriteTimeout(&SDU1, (const uint8_t *)buf, nLen, TIME_MS2I(5));
 
                     chThdSleepMicroseconds(USB_TX_MSG_SPLIT);
                 }
