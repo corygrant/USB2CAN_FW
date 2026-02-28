@@ -51,8 +51,8 @@ void CanRxThread(void *)
 
     while (true)
     {
-
-        msg_t res = canReceiveTimeout(&CAND1, CAN_ANY_MAILBOX, &msg, TIME_IMMEDIATE);
+        // Block (interrupt-driven) until a frame arrives, then process immediately
+        msg_t res = canReceiveTimeout(&CAND1, CAN_ANY_MAILBOX, &msg, TIME_MS2I(RX_TIMEOUT_MS));
         if (res == MSG_OK)
         {
             //Copy RX to TX frame
@@ -64,16 +64,14 @@ void CanRxThread(void *)
             else
                 txMsg.EID = msg.EID;
             txMsg.data64[0] = msg.data64[0];
-            
-            res = PostUsbTxFrame(&txMsg);
+
+            PostUsbTxFrame(&txMsg);
 
             rxLed.Blink(20);
         }
 
         if (chThdShouldTerminateX())
             chThdExit(MSG_OK);
-
-        chThdSleepMicroseconds(30);
     }
 }
 
